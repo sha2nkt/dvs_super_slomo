@@ -299,8 +299,10 @@ def train_val_dvs():
 				image_collector.append(interpolated_image_t)
 				dvs_collector.append(interpolated_dvs_t)
 
-				tb.image_summary("train/epoch{}/iter{}/dvs_image_or".format(epoch, i), dvst_var.detach(), global_step)
-				tb.image_summary("train/epoch{}/iter{}/dvs_image_recon".format(epoch, i), interpolated_dvs_t.squeeze().detach(), global_step)
+				# tb.image_summary("train/epoch{}/iter{}/dvs_or".format(epoch, i), dvst_var.detach(), global_step)
+				# tb.image_summary("train/epoch{}/iter{}/dvs_rec".format(epoch, i), interpolated_dvs_t.squeeze().detach(), global_step)
+				# tb.image_summary("train/epoch{}/iter{}/img_or".format(epoch, i), It_var.squeeze().detach(), global_step)
+				# tb.image_summary("train/epoch{}/iter{}/img_rec".format(epoch, i), interpolated_image_t.squeeze().detach(), global_step)
 
 
 				### Reconstruction Loss Collector ###
@@ -365,24 +367,25 @@ def train_val_dvs():
 				print("RGB Loss at iteration", i+1, "/", len(train_loader), ":", rgb_loss.item())
 				print("DVS Loss at iteration", i+1, "/", len(train_loader), ":", dvs_loss_reconstruction.item())
 			
-			if ((i+1) % 100) == 0:
+			if ((i+1) % 400) == 0:
 				save_path = os.path.join('/media/hdd1/shashant/super_slomo/samples',str(run_num),'epoch_'+str(epoch))
 				if not os.path.exists(save_path):
 					os.makedirs(save_path)
-
 				torchvision.utils.save_image((I0_var),os.path.join(save_path, str(i+1) +'1.jpg'),normalize=True)
 				for jj,image in enumerate(image_collector):
 					torchvision.utils.save_image((image),os.path.join(save_path, str(i+1) + str(jj+1)+'.jpg'),normalize=True)
 				torchvision.utils.save_image((I1_var),os.path.join(save_path, str(i+1)+'9.jpg'),normalize=True)
-			model_path = os.path.join('/media/hdd1/shashant/super_slomo/models',str(run_num))
-			if not os.path.exists(model_path):
-				os.makedirs(model_path)
+
+				model_path = os.path.join('/media/hdd1/shashant/super_slomo/models',str(run_num))
+				if not os.path.exists(model_path):
+					os.makedirs(model_path)
+				flow_file = 'checkpoint_flow_'+str(epoch)+'_'+str(i)+'.pt'
+				torch.save(flowModel.state_dict(), os.path.join(model_path, flow_file))
+				interpolation_file = 'checkpoint_interp_'+str(epoch)+'_'+str(i)+'.pt'
+				torch.save(visibilityModel.state_dict(), os.path.join(model_path, interpolation_file))
 			global_step += 1 
 
-		flow_file = 'checkpoint_flow_'+str(epoch)+'_'+str(i)+'.pt'
-		torch.save(flowModel.state_dict(), os.path.join(model_path, flow_file))
-		interpolation_file = 'checkpoint_interp_'+str(epoch)+'_'+str(i)+'.pt'
-		torch.save(visibilityModel.state_dict(), os.path.join(model_path, interpolation_file))
+		
 
 
 						
