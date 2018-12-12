@@ -7,18 +7,21 @@ import os
 import sys
 import argparse
 import time
+import torch.nn.functional as F
 import dataloader
 import model
 import logger, pdb
 import numpy as np
 
 tb_path = '/media/hdd1/shashant/super_slomo/tb_logs/'
+dvs_lam = 1
 if not os.path.exists(tb_path):
 	os.makedirs(tb_path)
 if not os.listdir(tb_path):
     run_num = 1
 else:    
 	run_num = max([int(x) for x in os.listdir(tb_path)]) + 1
+print('Current Run Number # %d' %run_num);
 global_step = 0
 
 class FlowWarper(nn.Module):
@@ -190,6 +193,12 @@ def train_val():
 
 			global_step += 1 
 
+# def binarize(img):
+# 	pdb.set_trace()
+# 	mu = 0.8
+# 	img = F.relu(img-mu)/(1-mu) # Add relu to avoid artifacts due to bilinear interpolation
+#     # tx_mask = torch.clamp(tx_mask, max=mu);
+
 
 def train_val_dvs():
 	global global_step
@@ -215,12 +224,12 @@ def train_val_dvs():
 											  shuffle=True, num_workers=1,
 											  pin_memory=True)
 	criterion = nn.L1Loss().cuda()
-	dvs_criterion = nn.L1Loss().cuda()
+	# dvs_criterion = nn.L1Loss().cuda()
 	# dvs_criterion = nn.KLDivLoss().cuda()
-	# dvs_criterion = nn.CrossEntropyLoss().cuda()
+	dvs_criterion = nn.CrossEntropyLoss().cuda()
 	criterionMSE = nn.MSELoss().cuda()
 
-	optimizer = torch.optim.Adam(list(flowModel.parameters()) + list(interpolationModel.parameters()), lr=0.0001)
+	optimizer = torch.optim.Adam(list(flowModel.parameters()) + list(visibilityModel.parameters()), lr=0.0001)
 
 	flowModel.train()
 	visibilityModel.train()
@@ -234,12 +243,12 @@ def train_val_dvs():
 		for i, (imageList, dvsList) in enumerate(train_loader):
 			
 			I0_var = torch.autograd.Variable(imageList[0]).cuda()
-			dvs0_var = dvsList[0], cuda()
+			dvs0_var = dvsList[0].cuda()
 			I1_var = torch.autograd.Variable(imageList[-1]).cuda()			
 			dvs1_var = dvsList[-1].cuda()
 
 			#torchvision.utils.save_image((I0_var),'samples/'+ str(i+1) +'1.jpg',normalize=True)
-			#brak	
+			#break	
 
 
 			flow_out_var = flowModel(I0_var, I1_var)
@@ -253,11 +262,12 @@ def train_val_dvs():
 			warping_loss_collector = []
 
 			image_collector = []
+			dvs_collector = []
 			for t_ in range(1,8):
 
 				t = t_/8
 				It_var = torch.autograd.Variable(imageList[t_]).cuda()
-				dvst_var = dvsList[t_].cuda()
+				dvst_var = dvsList[t_].type(torch.LongTensor).cuda()
 
 				F_t_0 = -(1-t)*t*F_0_1 + t*t*F_1_0
 				
@@ -266,8 +276,10 @@ def train_val_dvs():
 				
 				g_I0_F_t_0 = warper(I0_var, F_t_0)
 				g_I1_F_t_1 = warper(I1_var, F_t_1)
-				g_dvs0_F_t_0 = warper(dvs0_var, F_t_0)
-				g_dvs0_F_t_1 = warper(dvs1_var, F_t_1)
+				g_dvs0_F_t_0 = warper(dvs0_var.unsqueeze(1), F_t_0)
+				# g_dvs0_F_t_0 = binarize(g_dvs0_F_t_0)
+				g_dvs1_F_t_1 = warper(dvs1_var.unsqueeze(1), F_t_1)
+				# g_dvs1_F_t_1 = binarize(g_dvs1_F_t_1)
 
 				interp_out_var = visibilityModel(I0_var, I1_var, F_0_1, F_1_0, F_t_0, F_t_1, g_I0_F_t_0, g_I1_F_t_1)
 				# F_t_0_final = interp_out_var[:,:2,:,:] + F_t_0
@@ -279,12 +291,16 @@ def train_val_dvs():
 				# g_I0_F_t_1_final = warper(I1_var, F_t_1_final)
 
 				normalization = (1-t)*V_t_0 + t*V_t_1
-				interpolated_image_t_pre = (1-t)*V_t_0*g_I0_F_t_0 + t*V_t_1*g_I0_F_t_1
+				interpolated_image_t_pre = (1-t)*V_t_0*g_I0_F_t_0 + t*V_t_1*g_I1_F_t_1
 				interpolated_dvs_t_pre = (1-t)*V_t_0*g_dvs0_F_t_0 + t*V_t_1*g_dvs1_F_t_1
 				interpolated_image_t = interpolated_image_t_pre / normalization
 				interpolated_dvs_t = interpolated_dvs_t_pre / normalization
+				# interpolated_dvs_t = binarize(interpolated_dvs_t)
 				image_collector.append(interpolated_image_t)
 				dvs_collector.append(interpolated_dvs_t)
+				tb.image_summary("train/epoch{}/iter{}/dvs_image_or".format(epoch, i), dvst_var.detach(), global_step)
+				tb.image_summary("train/epoch{}/iter{}/dvs_image_recon".format(epoch, i), interpolated_dvs_t.squeeze().detach(), global_step)
+
 
 				### Reconstruction Loss Collector ###
 				loss_reconstruction_t = criterion(interpolated_image_t, It_var)
@@ -309,6 +325,9 @@ def train_val_dvs():
 			### Reconstruction Loss Computation ###	
 			loss_reconstruction = sum(loss_vector)/len(loss_vector)
 
+			### DVS Reconstruction Loss ###
+			dvs_loss_reconstruction = sum(dvs_loss_vector)/len(dvs_loss_vector)
+
 			### Perceptual Loss Computation ###
 			loss_perceptual = sum(perceptual_loss_collector)/len(perceptual_loss_collector)
 
@@ -324,9 +343,16 @@ def train_val_dvs():
 
 
 			### Overall Loss
-			loss = 0.8*loss_reconstruction + 0.005*loss_perceptual + 0.4*loss_warping + loss_smooth
+			rgb_loss = 0.8*loss_reconstruction + 0.005*loss_perceptual + 0.4*loss_warping + loss_smooth
+			loss = rgb_loss + dvs_lam*dvs_loss_reconstruction
 
 			tb.scalar_summary('train_loss', loss, global_step)
+			tb.scalar_summary('rgb_loss', rgb_loss, global_step)
+			tb.scalar_summary('dvs_loss', dvs_loss_reconstruction, global_step)
+
+
+
+
 
 			### Optimization
 			optimizer.zero_grad()
@@ -335,6 +361,8 @@ def train_val_dvs():
 
 			if ((i+1) % 10) == 0:
 				print("Loss at iteration", i+1, "/", len(train_loader), ":", loss.item())
+				print("RGB Loss at iteration", i+1, "/", len(train_loader), ":", rgb_loss.item())
+				print("DVS Loss at iteration", i+1, "/", len(train_loader), ":", dvs_loss_reconstruction.item())
 			
 			if ((i+1) % 100) == 0:
 				save_path = os.path.join('/media/hdd1/shashant/super_slomo/samples',str(run_num),'epoch_'+str(epoch))
@@ -361,4 +389,5 @@ def train_val_dvs():
 
 
 if __name__ == '__main__':
-	train_val()
+	# train_val_dvs()
+	train_val_dvs()

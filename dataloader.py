@@ -34,6 +34,7 @@ def populateTrainList2(folderPath):
 
 	for folder in folderList:
 		imageList = sorted(glob.glob(folder + '/' + '*.jpg'))
+
 		for i in range(0, len(imageList), 12):
 			tmp = imageList[i:i+12]
 			if len(tmp) == 12:
@@ -132,6 +133,45 @@ def randomCropOnList(image_list, output_size):
 
 	return cropped_img_list
 
+def randomCropOnListDvs(image_list, dvs_list, output_size):
+	
+	cropped_img_list = []
+	cropped_dvs_list = []
+
+	h,w = output_size
+	height, width, _ = image_list[0].shape
+	dvs_h, dvs_w = dvs_list[0].shape
+
+	#print(h,w,height,width)
+
+	i = random.randint(0, height - h)
+	j = random.randint(0, width - w)
+
+	st_y = 0
+	ed_y = w
+	st_x = 0
+	ed_x = h
+
+	or_st_y = i 
+	or_ed_y = i + w
+	or_st_x = j
+	or_ed_x = j + h    
+
+	#print(st_x, ed_x, st_y, ed_y)
+	#print(or_st_x, or_ed_x, or_st_y, or_ed_y)
+
+
+	for img,dvs in zip(image_list, dvs_list):
+		new_img = np.empty((h,w,3), dtype=np.float32)
+		new_dvs = np.empty((h,w), dtype=np.float32)
+		new_img.fill(128)
+		new_img[st_y: ed_y, st_x: ed_x, :] = img[or_st_y: or_ed_y, or_st_x: or_ed_x, :].copy()
+		new_dvs[st_y: ed_y, st_x: ed_x] = dvs[or_st_y: or_ed_y, or_st_x: or_ed_x].copy()
+		cropped_img_list.append(np.ascontiguousarray(new_img))
+		cropped_dvs_list.append(np.ascontiguousarray(new_dvs))
+
+
+	return cropped_img_list, cropped_dvs_list
 
 
 #print(len(populateTrainList('/home/user/data/nfs/')))
@@ -281,8 +321,8 @@ class dvsLoader(data.Dataset):
 		h,w,c = cv2.imread(dvs_path_list[0]).shape
 
 		image = cv2.imread(img_path_list[0])
-		dvs = cv2.imread(dvs_path_list[0])
-		
+		dvs = cv2.imread(dvs_path_list[0], cv2.COLOR_BGR2GRAY)
+
 		#print(h,w,c)
 
 		if h > w:
@@ -295,6 +335,7 @@ class dvsLoader(data.Dataset):
 
 
 		img_list = []
+		dvs_list = []
 
 		flip = random.randint(0,1)
 		if flip:
@@ -302,14 +343,18 @@ class dvsLoader(data.Dataset):
 				tmp = cv2.resize(cv2.imread(img_path), (scaleX,scaleY))[:,:,(2,1,0)]
 				img_list.append(np.array(cv2.flip(tmp,1), dtype=np.float32))
 			for dvs_path in dvs_path_list[start:start+9]:
-				tmp = cv2.resize(cv2.imread(dvs_path), (scaleX,scaleY))[:,:,(2,1,0)]
+				tmp = cv2.resize(cv2.imread(dvs_path, cv2.COLOR_BGR2GRAY), (scaleX,scaleY))
+				thresh = 127
+				tmp = cv2.threshold(tmp, thresh, 1, cv2.THRESH_BINARY)[1]
 				dvs_list.append(np.array(cv2.flip(tmp,1), dtype=np.float32))
 		else:
 			for img_path in img_path_list[start:start+9]:
 				tmp = cv2.resize(cv2.imread(img_path), (scaleX, scaleY))[:,:,(2,1,0)]
 				img_list.append(np.array(tmp,dtype=np.float32))
 			for dvs_path in dvs_path_list[start:start+9]:
-				tmp = cv2.resize(cv2.imread(dvs_path), (scaleX, scaleY))[:,:,(2,1,0)]
+				tmp = cv2.resize(cv2.imread(dvs_path, cv2.COLOR_BGR2GRAY), (scaleX, scaleY))
+				thresh = 127
+				tmp = cv2.threshold(tmp, thresh, 1, cv2.THRESH_BINARY)[1]
 				dvs_list.append(np.array(tmp,dtype=np.float32))
 		#cv2.imshow("j",tmp)
 		#cv2.waitKey(0) & 0xff
@@ -327,13 +372,12 @@ class dvsLoader(data.Dataset):
 			img_list[i][:,:,2] /= 0.225
 
 
-		cropped_img_list = randomCropOnList(img_list,(352,352))
-		cropped_dvs_list = randomCropOnList(dvs_list, (352,352))
+		cropped_img_list, cropped_dvs_list = randomCropOnListDvs(img_list, dvs_list ,(352,352))
 
 		for i in range(len(cropped_img_list)):
 			cropped_img_list[i] = torch.from_numpy(cropped_img_list[i].transpose((2, 0, 1)))
 		for i in range(len(cropped_dvs_list)):
-			cropped_dvs_list[i] = torch.from_numpy(cropped_dvs_list[i].transpose((2, 0, 1)))
+			cropped_dvs_list[i] = torch.from_numpy(cropped_dvs_list[i])
 
 		
 		return cropped_img_list, cropped_dvs_list
