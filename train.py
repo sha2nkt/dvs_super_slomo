@@ -65,7 +65,7 @@ def train_val():
 
 	#dataFeeder = dataloader.expansionLoader('/home/user/data/nfs')
 	dataFeeder = dataloader.expansionLoader('/media/hdd1/datasets/Adobe240-fps/original_high_fps_frames')
-	train_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=2, 
+	train_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=10, 
 											  shuffle=True, num_workers=1,
 											  pin_memory=True)
 	criterion = nn.L1Loss().cuda()
@@ -174,6 +174,7 @@ def train_val():
 				print("Loss at iteration", i+1, "/", len(train_loader), ":", loss.item())
 			
 			if ((i+1) % 100) == 0:
+				pdb.set_trace()
 				save_path = os.path.join('/media/hdd1/shashant/super_slomo/samples',str(run_num),'epoch_'+str(epoch))
 				if not os.path.exists(save_path):
 					os.makedirs(save_path)
@@ -182,7 +183,7 @@ def train_val():
 				for jj,image in enumerate(image_collector):
 					torchvision.utils.save_image((image),os.path.join(save_path, str(i+1) + str(jj+1)+'.jpg'),normalize=True)
 				torchvision.utils.save_image((I1_var),os.path.join(save_path, str(i+1)+'9.jpg'),normalize=True)
-
+			if ((i+1) % 1000) == 0:
 				model_path = os.path.join('/media/hdd1/shashant/super_slomo/models',str(run_num))
 				if not os.path.exists(model_path):
 					os.makedirs(model_path)
@@ -220,13 +221,13 @@ def train_val_dvs():
 	img_path = '/media/hdd1/datasets/Adobe240-fps/my_high_fps_frames/slomo_rgb'
 	dvs_path = '/media/hdd1/datasets/Adobe240-fps/my_high_fps_frames/slomo_dvs'
 	dataFeeder = dataloader.dvsLoader(img_path, dvs_path)
-	train_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=2, 
+	train_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=3, 
 											  shuffle=True, num_workers=1,
 											  pin_memory=True)
 	criterion = nn.L1Loss().cuda()
 	# dvs_criterion = nn.L1Loss().cuda()
 	# dvs_criterion = nn.KLDivLoss().cuda()
-	dvs_criterion = nn.CrossEntropyLoss().cuda()
+	dvs_criterion = nn.BCEWithLogitsLoss().cuda()
 	criterionMSE = nn.MSELoss().cuda()
 
 	optimizer = torch.optim.Adam(list(flowModel.parameters()) + list(visibilityModel.parameters()), lr=0.0001)
@@ -264,10 +265,9 @@ def train_val_dvs():
 			image_collector = []
 			dvs_collector = []
 			for t_ in range(1,8):
-
 				t = t_/8
 				It_var = torch.autograd.Variable(imageList[t_]).cuda()
-				dvst_var = dvsList[t_].type(torch.LongTensor).cuda()
+				dvst_var = dvsList[t_].cuda()
 
 				F_t_0 = -(1-t)*t*F_0_1 + t*t*F_1_0
 				
@@ -298,6 +298,7 @@ def train_val_dvs():
 				# interpolated_dvs_t = binarize(interpolated_dvs_t)
 				image_collector.append(interpolated_image_t)
 				dvs_collector.append(interpolated_dvs_t)
+
 				tb.image_summary("train/epoch{}/iter{}/dvs_image_or".format(epoch, i), dvst_var.detach(), global_step)
 				tb.image_summary("train/epoch{}/iter{}/dvs_image_recon".format(epoch, i), interpolated_dvs_t.squeeze().detach(), global_step)
 
@@ -319,7 +320,7 @@ def train_val_dvs():
 				warping_loss_collector.append(loss_warping_t)
 
 				### DVS Loss Collector ###
-				dvs_loss_recons_t = dvs_criterion(interpolated_dvs_t, dvst_var)
+				dvs_loss_recons_t = dvs_criterion(interpolated_dvs_t.squeeze(), dvst_var)
 				dvs_loss_vector.append(dvs_loss_recons_t)
 
 			### Reconstruction Loss Computation ###	
@@ -373,16 +374,15 @@ def train_val_dvs():
 				for jj,image in enumerate(image_collector):
 					torchvision.utils.save_image((image),os.path.join(save_path, str(i+1) + str(jj+1)+'.jpg'),normalize=True)
 				torchvision.utils.save_image((I1_var),os.path.join(save_path, str(i+1)+'9.jpg'),normalize=True)
-
-				model_path = os.path.join('/media/hdd1/shashant/super_slomo/models',str(run_num))
-				if not os.path.exists(model_path):
-					os.makedirs(model_path)
-				flow_file = 'checkpoint_flow_'+str(epoch)+'_'+str(i)+'.pt'
-				torch.save(flowModel.state_dict(), os.path.join(model_path, flow_file))
-				interpolation_file = 'checkpoint_interp_'+str(epoch)+'_'+str(i)+'.pt'
-				torch.save(visibilityModel.state_dict(), os.path.join(model_path, interpolation_file))
-
+			model_path = os.path.join('/media/hdd1/shashant/super_slomo/models',str(run_num))
+			if not os.path.exists(model_path):
+				os.makedirs(model_path)
 			global_step += 1 
+
+		flow_file = 'checkpoint_flow_'+str(epoch)+'_'+str(i)+'.pt'
+		torch.save(flowModel.state_dict(), os.path.join(model_path, flow_file))
+		interpolation_file = 'checkpoint_interp_'+str(epoch)+'_'+str(i)+'.pt'
+		torch.save(visibilityModel.state_dict(), os.path.join(model_path, interpolation_file))
 
 
 						

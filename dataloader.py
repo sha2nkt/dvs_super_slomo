@@ -28,12 +28,36 @@ def populateTrainList(folderPath):
 	
 	return trainList
 
-def populateTrainList2(folderPath):
+
+def populateTrainList2(rgbPath, dvsPath):
+	folderListRgb = [x[0] for x in os.walk(rgbPath)]
+	folderListDvs = [x[0] for x in os.walk(dvsPath)]
+	trainList_rgb = []
+	trainList_dvs = []
+
+	for im_folder, dvs_folder in zip(folderListRgb, folderListDvs):
+		imageList = sorted(glob.glob(im_folder + '/' + '*.jpg'))
+		dvsList = sorted(glob.glob(dvs_folder + '/' + '*.png'))
+
+		minLen = min(len(imageList), len(dvsList))
+		imageList = imageList[:minLen]
+		dvsList = dvsList[:minLen]
+
+		for i in range(0, len(imageList), 12):
+			tmp_rgb = imageList[i:i+12]
+			tmp_dvs = dvsList[i:i+12]
+			if len(tmp_rgb) == 12:
+			    trainList_rgb.append(imageList[i:i+12])
+			    trainList_dvs.append(dvsList[i:i+12])
+
+	return trainList_rgb, trainList_dvs
+
+def populateTrainList2Dvs(folderPath):
 	folderList = [x[0] for x in os.walk(folderPath)]
 	trainList = []
 
 	for folder in folderList:
-		imageList = sorted(glob.glob(folder + '/' + '*.jpg'))
+		imageList = sorted(glob.glob(folder + '/' + '*.png'))
 
 		for i in range(0, len(imageList), 12):
 			tmp = imageList[i:i+12]
@@ -170,7 +194,6 @@ def randomCropOnListDvs(image_list, dvs_list, output_size):
 		cropped_img_list.append(np.ascontiguousarray(new_img))
 		cropped_dvs_list.append(np.ascontiguousarray(new_dvs))
 
-
 	return cropped_img_list, cropped_dvs_list
 
 
@@ -306,10 +329,11 @@ class dvsLoader(data.Dataset):
 
 	def __init__(self, imFolderPath, dvsFolderPath,  mode='train'):
 
-		self.trainList = populateTrainList2(imFolderPath)
-		self.dvsList = populateTrainList2(dvsFolderPath)
+		self.trainList, self.dvsList = populateTrainList2(imFolderPath, dvsFolderPath)
+		# self.dvsList = populateTrainList2Dvs(dvsFolderPath)
 		self.mode = mode
 		print("# of training samples:", len(self.trainList))
+		print("# of dvs samples:", len(self.dvsList))
 
 
 	def __getitem__(self, index):
@@ -318,7 +342,7 @@ class dvsLoader(data.Dataset):
 		dvs_path_list = self.dvsList[index]
 		start = random.randint(0,3)
 		h,w,c = cv2.imread(img_path_list[0]).shape
-		h,w,c = cv2.imread(dvs_path_list[0]).shape
+		h,w = cv2.imread(dvs_path_list[0], cv2.COLOR_BGR2GRAY).shape
 
 		image = cv2.imread(img_path_list[0])
 		dvs = cv2.imread(dvs_path_list[0], cv2.COLOR_BGR2GRAY)
