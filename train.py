@@ -12,6 +12,8 @@ import dataloader
 import model
 import logger, pdb
 import numpy as np
+import argparse
+
 
 tb_path = '/media/hdd1/shashant/super_slomo/tb_logs/'
 dvs_lam = 1
@@ -225,12 +227,12 @@ def train_val_dvs():
 											  shuffle=True, num_workers=1,
 											  pin_memory=True)
 	criterion = nn.L1Loss().cuda()
-	# dvs_criterion = nn.L1Loss().cuda()
+	dvs_criterion = nn.L1Loss().cuda()
 	# dvs_criterion = nn.KLDivLoss().cuda()
 	dvs_criterion = nn.BCEWithLogitsLoss().cuda()
 	criterionMSE = nn.MSELoss().cuda()
 
-	optimizer = torch.optim.Adam(list(flowModel.parameters()) + list(visibilityModel.parameters()), lr=0.0001)
+	optimizer = torch.optim.Adam(list(flowModel.parameters()) + list(visibilityModel.parameters()), lr=1e-4)
 
 	flowModel.train()
 	visibilityModel.train()
@@ -393,4 +395,11 @@ def train_val_dvs():
 
 if __name__ == '__main__':
 	# train_val_dvs()
-	train_val_dvs()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--img_type', default='rgb',
+                        help="choose training on rgb or rgb+dvs")
+    args = parser.parse_args()
+    if args.img_type=='rgb':
+    	train_val()
+    if args.img_type=='dvs':
+    	train_val_dvs()

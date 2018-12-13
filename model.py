@@ -324,7 +324,8 @@ class UNet_refine(nn.Module):
 		#X = self.relu(X)
 		#print(X.size())
 		out = X#self.tanh(X)
-		out_processed = torch.cat((self.relu(X[:,:4,:,:]),self.sigmoid(torch.unsqueeze(out[:,4,:,:],1))),1)
+		# out_processed = torch.cat((self.relu(X[:,:4,:,:]),self.sigmoid(torch.unsqueeze(out[:,4,:,:],1))),1)
+		out_processed = torch.cat((self.relu(X[:,:4,:,:]),torch.unsqueeze(out[:,4,:,:],1)),1)
 
 		return out_processed
 
