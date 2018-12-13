@@ -11,30 +11,36 @@ class UNet_flow(nn.Module):
 		## Encoder 
 		self.conv1 = nn.Conv2d(6,32,7,1,3,bias=False)
 		self.conv2 = nn.Conv2d(32,32,7,1,3,bias=False)
+		self.bn1 = nn.BatchNorm2d(32)
 		self.relu = nn.LeakyReLU(0.1,True)#nn.ReLU(inplace=True)
 		self.avgpool1 = nn.AvgPool2d(kernel_size=7,stride=2, padding=3)
 
 		self.conv3 = nn.Conv2d(32,64,5,1,2,bias=False)
 		self.conv4 = nn.Conv2d(64,64,5,1,2,bias=False)
+		self.bn2 = nn.BatchNorm2d(64)
 		self.avgpool2 = nn.AvgPool2d(kernel_size=5,stride=2, padding=2)
 
 		self.conv5 = nn.Conv2d(64,128,3,1,1,bias=False)
 		self.conv6 = nn.Conv2d(128,128,3,1,1,bias=False)
+		self.bn3 = nn.BatchNorm2d(128)
 		#self.relu = nn.ReLU(inplace=True)
 		self.avgpool3 = nn.AvgPool2d(kernel_size=3,stride=2, padding=1)
 
 		self.conv7 = nn.Conv2d(128,256,3,1,1,bias=False)
 		self.conv8 = nn.Conv2d(256,256,3,1,1,bias=False)
+		self.bn4 = nn.BatchNorm2d(256)
 		#self.relu = nn.ReLU(inplace=True)
 		self.avgpool4 = nn.AvgPool2d(kernel_size=3,stride=2, padding=1)
 
 		self.conv9 = nn.Conv2d(256,512,3,1,1,bias=False)
 		self.conv10 = nn.Conv2d(512,512,3,1,1,bias=False)
+		self.bn5 = nn.BatchNorm2d(512)
 		#self.relu = nn.ReLU(inplace=True)
 		self.avgpool5 = nn.AvgPool2d(kernel_size=3,stride=2, padding=1)
 
 		self.conv11 = nn.Conv2d(512,512,3,1,1,bias=False)
 		self.conv12 = nn.Conv2d(512,512,3,1,1,bias=False)
+		self.bn6 = nn.BatchNorm2d(512)
 		#self.relu = nn.ReLU(inplace=True)
 		
 
@@ -66,13 +72,13 @@ class UNet_flow(nn.Module):
 	def forward(self, I0, I1):
 		sources = []
 
-
 		X = torch.cat([I0, I1], 1)
 
 		## Encoder
 		X = self.conv1(X)
 		X = self.relu(X)
 		X = self.conv2(X)
+		X = self.bn1(X)
 		X = self.relu(X)
 		##print(X.size())
 		sources.append(X)
@@ -81,6 +87,7 @@ class UNet_flow(nn.Module):
 		X = self.conv3(X)
 		X = self.relu(X)
 		X = self.conv4(X)
+		X = self.bn2(X)
 		X = self.relu(X)
 		##print(X.size())
 		sources.append(X)
@@ -89,6 +96,7 @@ class UNet_flow(nn.Module):
 		X = self.conv5(X)
 		X = self.relu(X)
 		X = self.conv6(X)
+		X = self.bn3(X)
 		X = self.relu(X)
 		##print(X.size())
 		sources.append(X)
@@ -97,6 +105,7 @@ class UNet_flow(nn.Module):
 		X = self.conv7(X)
 		X = self.relu(X)
 		X = self.conv8(X)
+		X = self.bn4(X)
 		X = self.relu(X)
 		##print(X.size())
 		sources.append(X)
@@ -105,6 +114,7 @@ class UNet_flow(nn.Module):
 		X = self.conv9(X)
 		X = self.relu(X)
 		X = self.conv10(X)
+		X = self.bn5(X)
 		X = self.relu(X)
 		#print(X.size())
 		sources.append(X)
@@ -113,6 +123,7 @@ class UNet_flow(nn.Module):
 		X = self.conv11(X)
 		X = self.relu(X)
 		X = self.conv12(X)
+		X = self.bn6(X)
 		X = self.relu(X)
 		#print(X.size())
 
@@ -123,6 +134,7 @@ class UNet_flow(nn.Module):
 		#print(X.size())
 		X = X + sources[-1]
 		X = self.conv14(X)
+		X = self.bn5(X)
 		X = self.relu(X)
 
 		X = self.upsample2D(X)
@@ -131,6 +143,7 @@ class UNet_flow(nn.Module):
 		#print(X.size())
 		X = X + sources[-2]
 		X = self.conv16(X)
+		X = self.bn4(X)
 		X = self.relu(X)
 
 		X = self.upsample2D(X)
@@ -139,6 +152,7 @@ class UNet_flow(nn.Module):
 		#print(X.size())
 		X = X + sources[-3]
 		X = self.conv18(X)
+		X = self.bn3(X)
 		X = self.relu(X)
 
 		X = self.upsample2D(X)
@@ -147,6 +161,7 @@ class UNet_flow(nn.Module):
 		#print(X.size())
 		X = X + sources[-4]
 		X = self.conv20(X)
+		X = self.bn2(X)
 		X = self.relu(X)
 
 		X = self.upsample2D(X)
@@ -155,6 +170,7 @@ class UNet_flow(nn.Module):
 		#print(X.size())
 		X = X + sources[-5]
 		X = self.conv22(X)
+		X = self.bn1(X)
 		X = self.relu(X)
 
 		X = self.conv23(X)
@@ -173,30 +189,36 @@ class UNet_refine(nn.Module):
 		## Encoder 
 		self.conv1 = nn.Conv2d(20,32,7,1,3,bias=False)
 		self.conv2 = nn.Conv2d(32,32,7,1,3,bias=False)
+		self.bn1 = nn.BatchNorm2d(32)
 		self.relu = nn.LeakyReLU(0.1,True)#nn.ReLU(inplace=True)
 		self.avgpool1 = nn.AvgPool2d(kernel_size=7,stride=2, padding=3)
 
 		self.conv3 = nn.Conv2d(32,64,5,1,2,bias=False)
 		self.conv4 = nn.Conv2d(64,64,5,1,2,bias=False)
+		self.bn2 = nn.BatchNorm2d(64)
 		self.avgpool2 = nn.AvgPool2d(kernel_size=5,stride=2, padding=2)
 
 		self.conv5 = nn.Conv2d(64,128,3,1,1,bias=False)
 		self.conv6 = nn.Conv2d(128,128,3,1,1,bias=False)
 		#self.relu = nn.ReLU(inplace=True)
+		self.bn3 = nn.BatchNorm2d(128)
 		self.avgpool3 = nn.AvgPool2d(kernel_size=3,stride=2, padding=1)
 
 		self.conv7 = nn.Conv2d(128,256,3,1,1,bias=False)
 		self.conv8 = nn.Conv2d(256,256,3,1,1,bias=False)
 		#self.relu = nn.ReLU(inplace=True)
+		self.bn4 = nn.BatchNorm2d(256)
 		self.avgpool4 = nn.AvgPool2d(kernel_size=3,stride=2, padding=1)
 
 		self.conv9 = nn.Conv2d(256,512,3,1,1,bias=False)
 		self.conv10 = nn.Conv2d(512,512,3,1,1,bias=False)
 		#self.relu = nn.ReLU(inplace=True)
+		self.bn5 = nn.BatchNorm2d(512)
 		self.avgpool5 = nn.AvgPool2d(kernel_size=3,stride=2, padding=1)
 
 		self.conv11 = nn.Conv2d(512,512,3,1,1,bias=False)
 		self.conv12 = nn.Conv2d(512,512,3,1,1,bias=False)
+		self.bn6 = nn.BatchNorm2d(512)
 		#self.relu = nn.ReLU(inplace=True)
 		
 
@@ -226,7 +248,7 @@ class UNet_refine(nn.Module):
 
 
 
-	def forward(self, I0, I1, F_0_1, F_1_0, F_t_0, F_t_1, g_I0_F_t_0, g_I1_F_t_1):
+	def forward(self, I0, I1, F_0_1, F_1_0, F_t_0, F_t_1, g_I0_F_t_0, g_I1_F_t_1, use_sigmoid=True):
 		sources = []
 
 
@@ -236,6 +258,7 @@ class UNet_refine(nn.Module):
 		X = self.conv1(X)
 		X = self.relu(X)
 		X = self.conv2(X)
+		X = self.bn1(X)
 		X = self.relu(X)
 		#print(X.size())
 		sources.append(X)
@@ -244,6 +267,7 @@ class UNet_refine(nn.Module):
 		X = self.conv3(X)
 		X = self.relu(X)
 		X = self.conv4(X)
+		X = self.bn2(X)
 		X = self.relu(X)
 		#print(X.size())
 		sources.append(X)
@@ -252,6 +276,7 @@ class UNet_refine(nn.Module):
 		X = self.conv5(X)
 		X = self.relu(X)
 		X = self.conv6(X)
+		X = self.bn3(X)
 		X = self.relu(X)
 		#print(X.size())
 		sources.append(X)
@@ -260,6 +285,7 @@ class UNet_refine(nn.Module):
 		X = self.conv7(X)
 		X = self.relu(X)
 		X = self.conv8(X)
+		X = self.bn4(X)
 		X = self.relu(X)
 		#print(X.size())
 		sources.append(X)
@@ -268,6 +294,7 @@ class UNet_refine(nn.Module):
 		X = self.conv9(X)
 		X = self.relu(X)
 		X = self.conv10(X)
+		X = self.bn5(X)
 		X = self.relu(X)
 		#print(X.size())
 		sources.append(X)
@@ -276,6 +303,7 @@ class UNet_refine(nn.Module):
 		X = self.conv11(X)
 		X = self.relu(X)
 		X = self.conv12(X)
+		X = self.bn6(X)
 		X = self.relu(X)
 		#print(X.size())
 
@@ -286,6 +314,7 @@ class UNet_refine(nn.Module):
 		#print(X.size())
 		X = X + sources[-1]
 		X = self.conv14(X)
+		X = self.bn5(X)
 		X = self.relu(X)
 
 		X = self.upsample2D(X)
@@ -294,6 +323,7 @@ class UNet_refine(nn.Module):
 		#print(X.size())
 		X = X + sources[-2]
 		X = self.conv16(X)
+		X = self.bn4(X)
 		X = self.relu(X)
 
 		X = self.upsample2D(X)
@@ -302,6 +332,7 @@ class UNet_refine(nn.Module):
 		#print(X.size())
 		X = X + sources[-3]
 		X = self.conv18(X)
+		X = self.bn3(X)
 		X = self.relu(X)
 
 		X = self.upsample2D(X)
@@ -310,6 +341,7 @@ class UNet_refine(nn.Module):
 		#print(X.size())
 		X = X + sources[-4]
 		X = self.conv20(X)
+		X = self.bn2(X)
 		X = self.relu(X)
 
 		X = self.upsample2D(X)
@@ -318,14 +350,17 @@ class UNet_refine(nn.Module):
 		#print(X.size())
 		X = X + sources[-5]
 		X = self.conv22(X)
+		X = self.bn1(X)
 		X = self.relu(X)
 
 		X = self.conv23(X)
 		#X = self.relu(X)
 		#print(X.size())
 		out = X#self.tanh(X)
-		# out_processed = torch.cat((self.relu(X[:,:4,:,:]),self.sigmoid(torch.unsqueeze(out[:,4,:,:],1))),1)
-		out_processed = torch.cat((self.relu(X[:,:4,:,:]),torch.unsqueeze(out[:,4,:,:],1)),1)
+		if use_sigmoid:
+			out_processed = torch.cat((self.relu(X[:,:4,:,:]),self.sigmoid(torch.unsqueeze(out[:,4,:,:],1))),1)
+		else:
+			out_processed = torch.cat((self.relu(X[:,:4,:,:]),torch.unsqueeze(out[:,4,:,:],1)),1)
 
 		return out_processed
 

@@ -52,12 +52,12 @@ def populateTrainList2(rgbPath, dvsPath):
 
 	return trainList_rgb, trainList_dvs
 
-def populateTrainList2Dvs(folderPath):
+def populateTrainList2Rgb(folderPath):
 	folderList = [x[0] for x in os.walk(folderPath)]
 	trainList = []
 
 	for folder in folderList:
-		imageList = sorted(glob.glob(folder + '/' + '*.png'))
+		imageList = sorted(glob.glob(folder + '/' + '*.jpg'))
 
 		for i in range(0, len(imageList), 12):
 			tmp = imageList[i:i+12]
@@ -203,7 +203,7 @@ class expansionLoader(data.Dataset):
 
 	def __init__(self, folderPath, mode='train'):
 
-		self.trainList = populateTrainList2(folderPath)
+		self.trainList = populateTrainList2Rgb(folderPath)
 		self.mode = mode
 		print("# of training samples:", len(self.trainList))
 

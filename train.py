@@ -48,7 +48,7 @@ class FlowWarper(nn.Module):
 		return img_tf
 
 
-def train_val():
+def train_val(args):
 	global global_step
 
 	#cudnn.benchmark = True
@@ -65,8 +65,8 @@ def train_val():
 
 
 	#dataFeeder = dataloader.expansionLoader('/home/user/data/nfs')
-	dataFeeder = dataloader.expansionLoader('/media/hdd1/datasets/Adobe240-fps/original_high_fps_frames')
-	train_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=10, 
+	dataFeeder = dataloader.expansionLoader(args.img_path)
+	train_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=2, 
 											  shuffle=True, num_workers=1,
 											  pin_memory=True)
 	criterion = nn.L1Loss().cuda()
@@ -114,7 +114,7 @@ def train_val():
 				g_I0_F_t_0 = warper(I0_var, F_t_0)
 				g_I1_F_t_1 = warper(I1_var, F_t_1)
 
-				interp_out_var = interpolationModel(I0_var, I1_var, F_0_1, F_1_0, F_t_0, F_t_1, g_I0_F_t_0, g_I1_F_t_1)
+				interp_out_var = interpolationModel(I0_var, I1_var, F_0_1, F_1_0, F_t_0, F_t_1, g_I0_F_t_0, g_I1_F_t_1, use_sigmoid=True)
 				F_t_0_final = interp_out_var[:,:2,:,:] + F_t_0
 				F_t_1_final = interp_out_var[:,2:4,:,:] + F_t_1
 				V_t_0 = torch.unsqueeze(interp_out_var[:,4,:,:],1)
@@ -175,8 +175,7 @@ def train_val():
 				print("Loss at iteration", i+1, "/", len(train_loader), ":", loss.item())
 			
 			if ((i+1) % 100) == 0:
-				pdb.set_trace()
-				save_path = os.path.join('/media/hdd1/shashant/super_slomo/samples',str(run_num),'epoch_'+str(epoch))
+				save_path = os.path.join(args.out_path,str(run_num),'epoch_'+str(epoch))
 				if not os.path.exists(save_path):
 					os.makedirs(save_path)
 
@@ -185,7 +184,7 @@ def train_val():
 					torchvision.utils.save_image((image),os.path.join(save_path, str(i+1) + str(jj+1)+'.jpg'),normalize=True)
 				torchvision.utils.save_image((I1_var),os.path.join(save_path, str(i+1)+'9.jpg'),normalize=True)
 			if ((i+1) % 1000) == 0:
-				model_path = os.path.join('/media/hdd1/shashant/super_slomo/models',str(run_num))
+				model_path = os.path.join(args.model_path,str(run_num))
 				if not os.path.exists(model_path):
 					os.makedirs(model_path)
 				flow_file = 'checkpoint_flow_'+str(epoch)+'_'+str(i)+'.pt'
@@ -202,12 +201,12 @@ def train_val():
 #     # tx_mask = torch.clamp(tx_mask, max=mu);
 
 
-def train_val_dvs(lr, dvs_lam):
+def train_val_dvs(lr, dvs_lam, loss_type, args):
 	global global_step
 
 	#cudnn.benchmark = True
 	flowModel = model.UNet_flow().cuda()
-	visibilityModel = model.UNet_refine().cuda()
+	interpolationModel = model.UNet_refine().cuda()
 
 	### ResNet for Perceptual Loss
 	res50_model = torchvision.models.resnet18(pretrained=True)
@@ -219,22 +218,29 @@ def train_val_dvs(lr, dvs_lam):
 
 
 	#dataFeeder = dataloader.expansionLoader('/home/user/data/nfs')
-	img_path = '/media/hdd1/datasets/Adobe240-fps/my_high_fps_frames/slomo_rgb'
-	dvs_path = '/media/hdd1/datasets/Adobe240-fps/my_high_fps_frames/slomo_dvs'
+	img_path = args.img_path
+	dvs_path = args.dvs_path
 	dataFeeder = dataloader.dvsLoader(img_path, dvs_path)
-	train_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=3, 
+	train_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=2, 
 											  shuffle=True, num_workers=1,
 											  pin_memory=True)
 	criterion = nn.L1Loss().cuda()
-	dvs_criterion = nn.L1Loss().cuda()
-	# dvs_criterion = nn.KLDivLoss().cuda()
-	dvs_criterion = nn.BCEWithLogitsLoss().cuda()
+	if loss_type == 'L1':
+		dvs_criterion = nn.L1Loss().cuda()
+		use_sigmoid = True
+	if loss_type == 'KL':
+		dvs_criterion = nn.KLDivLoss().cuda()
+		use_sigmoid = True
+	if loss_type == 'BCEWithLogits':
+		dvs_criterion = nn.BCEWithLogitsLoss().cuda()
+		use_sigmoid == False
+
 	criterionMSE = nn.MSELoss().cuda()
 
 	optimizer = torch.optim.Adam(list(flowModel.parameters()) + list(visibilityModel.parameters()), lr=lr)
 
 	flowModel.train()
-	visibilityModel.train()
+	interpolationModel.train()
 
 	warper = FlowWarper(352,352)
 
@@ -282,10 +288,11 @@ def train_val_dvs(lr, dvs_lam):
 				g_dvs1_F_t_1 = warper(dvs1_var.unsqueeze(1), F_t_1)
 				# g_dvs1_F_t_1 = binarize(g_dvs1_F_t_1)
 
-				interp_out_var = visibilityModel(I0_var, I1_var, F_0_1, F_1_0, F_t_0, F_t_1, g_I0_F_t_0, g_I1_F_t_1)
+				# interp_out_var = visibilityModel(I0_var, I1_var, F_0_1, F_1_0, F_t_0, F_t_1, g_I0_F_t_0, g_I1_F_t_1, use_sigmoid=use_sigmoid)
+				interp_out_var = interpolationModel(I0_var, I1_var, F_0_1, F_1_0, F_t_0, F_t_1, g_I0_F_t_0, g_I1_F_t_1, use_sigmoid=use_sigmoid)
 				# F_t_0_final = interp_out_var[:,:2,:,:] + F_t_0
 				# F_t_1_final = interp_out_var[:,2:4,:,:] + F_t_1
-				V_t_0 = torch.unsqueeze(interp_out_var[:,1,:,:],1)
+				V_t_0 = torch.unsqueeze(interp_out_var[:,-1,:,:],1)
 				V_t_1 = 1 - V_t_0
 
 				# g_I0_F_t_0_final = warper(I0_var, F_t_0_final)
@@ -368,16 +375,16 @@ def train_val_dvs(lr, dvs_lam):
 				print("RGB Loss at iteration", i+1, "/", len(train_loader), ":", rgb_loss.item())
 				print("DVS Loss at iteration", i+1, "/", len(train_loader), ":", dvs_loss_reconstruction.item())
 			
-			if ((i+1) % 400) == 0:
-				save_path = os.path.join('/media/hdd1/shashant/super_slomo/samples',str(run_num),'epoch_'+str(epoch))
+			if ((i+1) % 100) == 0:
+				save_path = os.path.join(args.out_path ,str(run_num),'epoch_'+str(epoch))
 				if not os.path.exists(save_path):
 					os.makedirs(save_path)
 				torchvision.utils.save_image((I0_var),os.path.join(save_path, str(i+1) +'1.jpg'),normalize=True)
 				for jj,image in enumerate(image_collector):
 					torchvision.utils.save_image((image),os.path.join(save_path, str(i+1) + str(jj+1)+'.jpg'),normalize=True)
 				torchvision.utils.save_image((I1_var),os.path.join(save_path, str(i+1)+'9.jpg'),normalize=True)
-
-				model_path = os.path.join('/media/hdd1/shashant/super_slomo/models',str(run_num))
+			if ((i+1) % 400) == 0:
+				model_path = os.path.join(args.model_path,str(run_num))
 				if not os.path.exists(model_path):
 					os.makedirs(model_path)
 				flow_file = 'checkpoint_flow_'+str(epoch)+'_'+str(i)+'.pt'
@@ -397,11 +404,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_type', default='rgb',
                         help="choose training on rgb or rgb+dvs")
-    parser.add_argument('--lr', default=1e-4, , type=float, help="Learning rate for the model")
+    parser.add_argument('--lr', default=1e-4,type=float, help="Learning rate for the model")
     parser.add_argument('--dvs_lam', default=1, type=float, help="Weight for the DVS Loss")
-
+    parser.add_argument('--loss_type', default='L1', help="L1, BCEWithLogits, KL")
+    parser.add_argument('--rgb_path', default='/media/hdd1/datasets/Adobe240-fps/my_high_fps_frames/slomo_rgb', help="L1, BCEWithLogits, KL")
+    parser.add_argument('--dvs_path', default='/media/hdd1/datasets/Adobe240-fps/my_high_fps_frames/slomo_dvs', help="L1, BCEWithLogits, KL")
+    parser.add_argument('--model_path', default='/media/hdd1/shashant/super_slomo/models', help="L1, BCEWithLogits, KL")
+    parser.add_argument('--out_path', default='/media/hdd1/shashant/super_slomo/samples', help="L1, BCEWithLogits, KL")
     args = parser.parse_args()
+    assert args.loss_type in ['L1', 'BCEWithLogits', 'KL']
+
     if args.img_type=='rgb':
-    	train_val()
+    	train_val(args)
     if args.img_type=='dvs':
-    	train_val_dvs(args.lr, args.dvs_lam)
+    	train_val_dvs(args.lr, args.dvs_lam, args.loss_type, args)
