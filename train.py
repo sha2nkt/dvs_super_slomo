@@ -16,7 +16,6 @@ import argparse
 
 
 tb_path = '/media/hdd1/shashant/super_slomo/tb_logs/'
-dvs_lam = 1
 if not os.path.exists(tb_path):
 	os.makedirs(tb_path)
 if not os.listdir(tb_path):
@@ -203,7 +202,7 @@ def train_val():
 #     # tx_mask = torch.clamp(tx_mask, max=mu);
 
 
-def train_val_dvs():
+def train_val_dvs(lr, dvs_lam):
 	global global_step
 
 	#cudnn.benchmark = True
@@ -232,7 +231,7 @@ def train_val_dvs():
 	dvs_criterion = nn.BCEWithLogitsLoss().cuda()
 	criterionMSE = nn.MSELoss().cuda()
 
-	optimizer = torch.optim.Adam(list(flowModel.parameters()) + list(visibilityModel.parameters()), lr=1e-4)
+	optimizer = torch.optim.Adam(list(flowModel.parameters()) + list(visibilityModel.parameters()), lr=lr)
 
 	flowModel.train()
 	visibilityModel.train()
@@ -398,8 +397,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_type', default='rgb',
                         help="choose training on rgb or rgb+dvs")
+    parser.add_argument('--lr', default=1e-4, , type=float, help="Learning rate for the model")
+    parser.add_argument('--dvs_lam', default=1, type=float, help="Weight for the DVS Loss")
+
     args = parser.parse_args()
     if args.img_type=='rgb':
     	train_val()
     if args.img_type=='dvs':
-    	train_val_dvs()
+    	train_val_dvs(args.lr, args.dvs_lam)
