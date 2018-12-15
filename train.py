@@ -200,6 +200,31 @@ def train_val(args):
 # 	img = F.relu(img-mu)/(1-mu) # Add relu to avoid artifacts due to bilinear interpolation
 #     # tx_mask = torch.clamp(tx_mask, max=mu);
 
+# def tensor_grad(tensor, kernel):
+#     b,c,_,_ = tensor.shape
+#     kernel = kernel.repeat(1,c,1,1)
+#     tensor_grad = F.conv2d(tensor, kernel, stride=1, padding=1)
+#     return tensor_grad
+
+# def get_gradients_xy(flow):
+# 	flow_x = flow[:,0,:,:]
+# 	flow_y = flow[:,1,:,:]
+#     sobelx = torch.FloatTensor([[0,0,0],[-0.5,0,0.5],[0,0,0]])
+#     sobely = torch.t(sobelx)
+#     sobelx_kernel = sobelx.unsqueeze(0).unsqueeze(0).cuda()
+#     sobely_kernel = sobely.unsqueeze(0).unsqueeze(0).cuda()
+#     gradx = tensor_grad(flow_x, sobelx_kernel)
+#     grady = tensor_grad(flow_y, sobely_kernel)
+#     return gradx, grady
+
+# def smoothness_loss(opt_flow, imgs):
+#     ## Check this implementation
+#     flow_gradx, flow_grady = get_gradients_xy(opt_flow)
+#     imgs = F.avg_pool2d(imgs, 8, stride=8)
+#     imgs_gradx, imgs_grady = get_gradients_xy(imgs)
+#     loss = torch.mean(torch.square(imgs_gradx))+ torch.mean(torch.square(imgs_grady))
+#     return loss
+
 
 def train_val_dvs(args):
 	global global_step
@@ -233,7 +258,7 @@ def train_val_dvs(args):
 		use_sigmoid = True
 	if args.loss_type == 'BCEWithLogits':
 		dvs_criterion = nn.BCEWithLogitsLoss().cuda()
-		use_sigmoid == False
+		use_sigmoid = False
 
 	criterionMSE = nn.MSELoss().cuda()
 
@@ -249,6 +274,8 @@ def train_val_dvs(args):
 
 	for epoch in range(200):
 		for i, (imageList, dvsList) in enumerate(train_loader):
+			if min(len(imageList), len(dvsList))<2:
+				continue
 			
 			I0_var = torch.autograd.Variable(imageList[0]).cuda()
 			dvs0_var = dvsList[0].cuda()
@@ -333,6 +360,7 @@ def train_val_dvs(args):
 				dvs_loss_recons_t = dvs_criterion(interpolated_dvs_t.squeeze(), dvst_var)
 				dvs_loss_vector.append(dvs_loss_recons_t)
 
+
 			### Reconstruction Loss Computation ###	
 			loss_reconstruction = sum(loss_vector)/len(loss_vector)
 
@@ -355,7 +383,8 @@ def train_val_dvs(args):
 
 			### Overall Loss
 			rgb_loss = 0.8*loss_reconstruction + 0.005*loss_perceptual + 0.4*loss_warping + loss_smooth
-			loss = rgb_loss + args.dvs_lam*dvs_loss_reconstruction
+			# loss = rgb_loss + args.dvs_lam*dvs_loss_reconstruction
+			loss = dvs_loss_reconstruction + 0.4*loss_warping + loss_smooth
 
 			tb.scalar_summary('train_loss', loss, global_step)
 			tb.scalar_summary('rgb_loss', rgb_loss, global_step)
@@ -403,7 +432,7 @@ if __name__ == '__main__':
 	# train_val_dvs()
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_type', default='rgb',
-                        help="choose training on rgb or rgb+dvs")
+                        help="choose training on rgb or rgb+dvs", required=True)
     parser.add_argument('--lr', default=1e-4,type=float, help="Learning rate for the model")
     parser.add_argument('--dvs_lam', default=1, type=float, help="Weight for the DVS Loss")
     parser.add_argument('--loss_type', default='L1', help="L1, BCEWithLogits, KL")

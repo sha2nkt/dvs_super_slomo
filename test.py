@@ -11,9 +11,11 @@ import dataloader
 import model
 import logger, pdb
 import numpy as np
+import math
 
-run_num = 1
-tb_path = '/media/hdd1/shashant/super_slomo/tb_logs/'
+run_num = 7
+# tb_path = '/media/hdd1/shashant/super_slomo/tb_logs/'
+# model_path = os.path.join('/media/hdd1/shashant/super_slomo/baselines/')
 model_path = os.path.join('/media/hdd1/shashant/super_slomo/models',str(run_num))
 
 # if not os.path.exists(tb_path):
@@ -46,28 +48,27 @@ class FlowWarper(nn.Module):
 		img_tf = torch.nn.functional.grid_sample(img, grid_tf) # bilinear interp
 		return img_tf
 
-
 def test():
 	flowModel = model.UNet_flow().cuda()
 	interpolationModel = model.UNet_refine().cuda()
 	# Load pretrained flowModel and interpolationModel
-	flow_model = os.path.join(model_path, 'checkpoint_flow_13_3899.pt')
-	interp_model = os.path.join(model_path, 'checkpoint_interp_13_3899.pt')
+	flow_model = os.path.join(model_path, 'checkpoint_flow_14_1999.pt')
+	interp_model = os.path.join(model_path, 'checkpoint_interp_14_1999.pt')
 	flow_chkpt = torch.load(flow_model)
 	interp_chkpt = torch.load(interp_model)
 	flowModel.load_state_dict(flow_chkpt)
 	interpolationModel.load_state_dict(interp_chkpt)
 
-	### ResNet for Perceptual Loss
-	res50_model = torchvision.models.resnet18(pretrained=True)
-	res50_conv = nn.Sequential(*list(res50_model.children())[:-2])
-	res50_conv.cuda()
+	# ### ResNet for Perceptual Loss
+	# res50_model = torchvision.models.resnet18(pretrained=True)
+	# res50_conv = nn.Sequential(*list(res50_model.children())[:-2])
+	# res50_conv.cuda()
 
-	for param in res50_conv.parameters():
+	# for param in res50_conv.parameters():
 
-		param.requires_grad = False
+	# 	param.requires_grad = False
 
-	dataFeeder = dataloader.testLoader('/media/hdd1/datasets/Adobe240-fps/test_low_fps_frames/', mode='test')
+	dataFeeder = dataloader.testLoader('/media/hdd1/datasets/Adobe240-fps/my_high_fps_frames/slomo_rgb/000055', mode='test')
 	test_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=1, 
 											  shuffle=False, num_workers=1,
 											  pin_memory=True)
@@ -84,6 +85,8 @@ def test():
 		flow_out_var = flowModel(I0_var, I1_var)
 		F_0_1 = flow_out_var[:,:2,:,:]
 		F_1_0 = flow_out_var[:,2:,:,:]
+		np.save('./opt_01_0.npy', F_0_1.detach().cpu().numpy())
+		np.save('./opt_10_0.npy', F_1_0.detach().cpu().numpy())
 		image_collector = []
 		for t_ in range(1,8):
 			t = t_/8
@@ -91,6 +94,9 @@ def test():
 			F_t_0 = -(1-t)*t*F_0_1 + t*t*F_1_0
 			
 			F_t_1 = (1-t)*(1-t)*F_0_1 - t*(1-t)*(F_1_0)
+
+			np.save('./opt_t0_'+str(t_)+'.npy', F_t_0.detach().cpu().numpy())
+			np.save('./opt_t1_'+str(t_)+'.npy', F_t_1.detach().cpu().numpy())
 			
 			
 			g_I0_F_t_0 = warper(I0_var, F_t_0)
@@ -127,9 +133,12 @@ def make_vid(save_path):
 	vid_path = save_path.replace('frames/', 'videos/')
 	if not os.path.exists(vid_path):
 		os.makedirs(vid_path)
-	os_cmd = 'ffmpeg -framerate 30 -i '+frame_path +'/%04d.jpg '+os.path.join(vid_path)+'/wine.mp4 '
+	os_cmd = 'ffmpeg -framerate 60 -i '+frame_path +'/%04d.jpg '+os.path.join(vid_path)+'/test_sim1.mp4 '
 	# print(os_cmd)
 	os.system(os_cmd)
+
+
+
 
 if __name__ == '__main__':
 	# train_val()

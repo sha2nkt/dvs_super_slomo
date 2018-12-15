@@ -65,6 +65,19 @@ def populateTrainList2Rgb(folderPath):
 			    trainList.append(imageList[i:i+12])
 	return trainList
 
+def populateValList2Rgb(folderPath):
+	folderList = [x[0] for x in os.walk(folderPath)]
+	trainList = []
+
+	for folder in folderList:
+		imageList = sorted(glob.glob(folder + '/' + '*.jpg'))
+
+		for i in range(0, len(imageList), 9):
+			tmp = imageList[i:i+9]
+			if len(tmp) == 9:
+			    trainList.append(imageList[i:i+9])
+	return trainList
+
 # def populateDvsList2(folderPath):
 # 	folderList = [x[0] for x in os.walk(folderPath)]
 # 	trainList = []
@@ -297,6 +310,65 @@ class testLoader(data.Dataset):
 		img_list = []
 
 		for img_path in img_path_list[start:start+2]:
+			tmp = cv2.resize(cv2.imread(img_path), (scaleX, scaleY))[:,:,(2,1,0)]
+			img_list.append(np.array(tmp,dtype=np.float32))
+		#cv2.imshow("j",tmp)
+		#cv2.waitKey(0) & 0xff
+		#brak
+		for i in range(len(img_list)):
+			#print(img_list[i].shape)
+			#brak
+			img_list[i] /= 255
+			img_list[i][:,:,0] -= 0.485#(img_list[i]/127.5) - 1
+			img_list[i][:,:,1] -= 0.456
+			img_list[i][:,:,2] -= 0.406
+
+			img_list[i][:,:,0] /= 0.229
+			img_list[i][:,:,1] /= 0.224
+			img_list[i][:,:,2] /= 0.225
+
+
+		cropped_img_list = fixedCropOnList(img_list, (352, 352))		
+		for i in range(len(cropped_img_list)):
+			cropped_img_list[i] = torch.from_numpy(cropped_img_list[i].transpose((2, 0, 1)))
+
+		
+		return cropped_img_list 
+
+	def __len__(self):
+		return len(self.trainList)
+
+class valLoader(data.Dataset):
+
+	def __init__(self, folderPath, mode='test'):
+
+		self.trainList = populateValList2Rgb(folderPath)
+		self.mode = mode
+		print("# of training samples:", len(self.trainList))
+
+
+	def __getitem__(self, index):
+
+		img_path_list = self.trainList[index]
+		start = 0
+		h,w,c = cv2.imread(img_path_list[0]).shape
+
+		image = cv2.imread(img_path_list[0])
+		
+		#print(h,w,c)
+
+		if h > w:
+			scaleX = int(360*(h/w))
+			scaleY = 360
+		elif h <= w:
+			scaleX = 360
+			scaleY = int(360*(w/h))
+
+
+
+		img_list = []
+
+		for img_path in img_path_list[start:start+9]:
 			tmp = cv2.resize(cv2.imread(img_path), (scaleX, scaleY))[:,:,(2,1,0)]
 			img_list.append(np.array(tmp,dtype=np.float32))
 		#cv2.imshow("j",tmp)

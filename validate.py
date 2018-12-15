@@ -13,9 +13,11 @@ import logger, pdb
 import numpy as np
 import math, sys
 
-run_num = 3
+run_num = 7
+print(run_num)
 tb_path = '/media/hdd1/shashant/super_slomo/tb_logs/'
 model_path = os.path.join('/media/hdd1/shashant/super_slomo/models',str(run_num))
+# model_path = os.path.join('/media/hdd1/shashant/super_slomo/baselines/')
 
 # if not os.path.exists(tb_path):
 # 	os.makedirs(tb_path)
@@ -47,26 +49,38 @@ class FlowWarper(nn.Module):
 		img_tf = torch.nn.functional.grid_sample(img, grid_tf) # bilinear interp
 		return img_tf
 
+def normalize_tensor(img):
+	for i in range(len(img)):
+		img[i][0,:,:] *= 0.229
+		img[i][1,:,:] *= 0.224
+		img[i][2,:,:] *= 0.225
+
+		img[i][0,:,:] += 0.485#(img[i]/127.5) - 1
+		img[i][1,:,:] += 0.456
+		img[i][2,:,:] += 0.406
+
+		img[i] *= 255
+	return img
+
 def psnr(img1, img2):
-	pdb.set_trace()
+	img1 = normalize_tensor(img1.clone())
+	img2 = normalize_tensor(img2.clone())
 	mse = torch.mean( (img1 - img2) ** 2 )
 	if mse == 0:
 		return 100
-	PIXEL_MAX = 1.0
+	PIXEL_MAX = 255.0
 	return 20 * math.log10(PIXEL_MAX / torch.sqrt(mse))
 
-def test():
+def test(args):
 	flowModel = model.UNet_flow().cuda()
-	print(flowModel)
 	interpolationModel = model.UNet_refine().cuda()
 	# Load pretrained flowModel and interpolationModel
-	flow_model = os.path.join(model_path, 'checkpoint_interp_22_1999.pt')
-	interp_model = os.path.join(model_path, 'checkpoint_interp_22_1999.pt')
+	flow_model = os.path.join(model_path, 'checkpoint_flow_'+str(args.iter)+'_1999.pt')
+	# flow_model = os.path.join(model_path, 'rgb_checkpoint_flow_0_1999.pt')
+	interp_model = os.path.join(model_path, 'checkpoint_interp_'+str(args.iter)+'_1999.pt')
+	# interp_model = os.path.join(model_path, 'rgb_checkpoint_interp_0_1999.pt')
 	flow_chkpt = torch.load(flow_model)
 	interp_chkpt = torch.load(interp_model)
-	pdb.set_trace()
-	for param_tensor in flow_chkpt.state_dict():
-		print(param_tensor, "\t", flow_chkpt.state_dict()[param_tensor].size())
 	flowModel.load_state_dict(flow_chkpt)
 	interpolationModel.load_state_dict(interp_chkpt)
 
@@ -79,7 +93,8 @@ def test():
 
 	# 	param.requires_grad = False
 
-	dataFeeder = dataloader.valLoader('/media/hdd1/datasets/Adobe240-fps/test_low_fps_frames/', mode='test')
+	# dataFeeder = dataloader.valLoader('/media/hdd1/datasets/Adobe240-fps/test_low_fps_frames/', mode='test')
+	dataFeeder = dataloader.valLoader('/media/hdd1/datasets/Adobe240-fps/val_high_fps_frames/slomo_rgb_test/', mode='test')
 	val_loader = torch.utils.data.DataLoader(dataFeeder, batch_size=1, 
 											  shuffle=False, num_workers=1,
 											  pin_memory=True)
@@ -88,7 +103,7 @@ def test():
 	interpolationModel.eval()
 
 	warper = FlowWarper(352,352)
-
+	psnr_collector = []
 	count = 0
 	for i, (imageList) in enumerate(val_loader):
 		I0_var = torch.autograd.Variable(imageList[0]).cuda()
@@ -122,20 +137,20 @@ def test():
 			interpolated_image_t_pre = (1-t)*V_t_0*g_I0_F_t_0_final + t*V_t_1*g_I0_F_t_1_final
 			interpolated_image_t = interpolated_image_t_pre / normalization
 			image_collector.append(interpolated_image_t)
-			psnr(It_var, interpolated_image_t)
+			psnr_collector.append(psnr(It_var, interpolated_image_t))
 
+		# save_path = os.path.join('/media/hdd1/datasets/Adobe240-fps/pred_high_fps_frames',str(run_num))
+		# if not os.path.exists(save_path):
+		# 	os.makedirs(save_path)
 
-		save_path = os.path.join('/media/hdd1/datasets/Adobe240-fps/pred_high_fps_frames',str(run_num))
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
-
-		torchvision.utils.save_image((I0_var),os.path.join(save_path, str(count).zfill(4) +'.jpg'),normalize=True)
+		# torchvision.utils.save_image((I0_var),os.path.join(save_path, str(count).zfill(4) +'.jpg'),normalize=True)
+		# count += 1
+		# for jj,image in enumerate(image_collector):
+		# 	torchvision.utils.save_image((image),os.path.join(save_path, str(count).zfill(4)+'.jpg'),normalize=True)
+		# 	count += 1
+		# torchvision.utils.save_image((I1_var),os.path.join(save_path, str(count).zfill(4) +'.jpg'),normalize=True)
 		count += 1
-		for jj,image in enumerate(image_collector):
-			torchvision.utils.save_image((image),os.path.join(save_path, str(count).zfill(4)+'.jpg'),normalize=True)
-			count += 1
-		torchvision.utils.save_image((I1_var),os.path.join(save_path, str(count).zfill(4) +'.jpg'),normalize=True)
-		count += 1
+	print("Mean PSNR: %.4f" %np.mean(psnr_collector))
 	return save_path
 						
 def make_vid(save_path):
@@ -151,8 +166,13 @@ def make_vid(save_path):
 
 
 if __name__ == '__main__':
+	parser = argparse.ArgumentParser()
+	parser.add_argument('--iter', default=1, type=int,
+						help="choose training_iter_num", required=True)
+	args = parser.parse_args()
+
 	# train_val()
 	# save_path = os.path.join('/media/hdd1/datasets/Adobe240-fps/pred_high_fps_frames',str(run_num))
-	save_path = test()
+	save_path = test(args)
 	# make_vid(save_path)
 
